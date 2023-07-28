@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use poem::{listener::TcpListener, web::Data, EndpointExt, Route, Server};
+use poem::{listener::TcpListener, middleware::Tracing, web::Data, EndpointExt, Route, Server};
 use poem_openapi::{param::Query, payload::Json, OpenApi, OpenApiService};
 use poem_openapi_derive::{ApiResponse, Object};
 
@@ -14,14 +14,17 @@ const BASE_POKEMONAPI_ADDRESS: &'static str = "https://pokeapi.co/api/v2/";
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
+    tracing_subscriber::fmt()
+        .with_max_level(Level::INFO)
+        .with_env_filter("poem=trace")
+        .init();
     let pokedex = Arc::new(Pokedex::new(BASE_POKEMONAPI_ADDRESS)?);
     let api_service = OpenApiService::new(Api, "Demo", "1.0").server("http://localhost:3001/api");
     let ui = api_service.swagger_ui();
     Server::new(TcpListener::bind(":::3001"))
         .run(
             Route::new()
-                .nest("/api", api_service.data(pokedex))
+                .nest("/api", api_service.data(pokedex).with(Tracing))
                 .nest("/", ui),
         )
         .await?;
@@ -46,8 +49,8 @@ struct Pokemon {
 
 #[OpenApi]
 impl Api {
-    #[tracing::instrument(level=tracing::Level::INFO,skip(self, pokedex,))]
     #[oai(path = "/pokemon", method = "get")]
+    #[tracing::instrument(level=tracing::Level::INFO,skip(self, pokedex,))]
     async fn pokemon(
         &self,
         Data(pokedex): Data<&Arc<pokemon_api::Pokedex>>,
@@ -72,7 +75,6 @@ impl Api {
                         let mut segments = url.path_segments().ok_or(InvalidUrlInResponse)?;
                         let last_segment = segments.nth(3).ok_or(InvalidUrlInResponse)?;
                         let id = last_segment.parse().map_err(|_| InvalidUrlInResponse)?;
-
                         Ok(Pokemon { id, name })
                     })
                     .collect();
