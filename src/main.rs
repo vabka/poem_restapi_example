@@ -15,7 +15,7 @@ const BASE_POKEMONAPI_ADDRESS: &'static str = "https://pokeapi.co/api/v2/";
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt()
-        .with_max_level(Level::DEBUG)
+        .with_max_level(Level::INFO)
         .init();
     let pokedex = Arc::new(Pokedex::new(BASE_POKEMONAPI_ADDRESS)?);
     let api_service = OpenApiService::new(Api, "Demo", "1.0").server("http://localhost:3001/api");
